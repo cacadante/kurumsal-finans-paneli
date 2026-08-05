@@ -3,7 +3,6 @@ import sqlite3
 import pandas as pd
 import hashlib
 import secrets
-from datetime import date
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
@@ -16,11 +15,12 @@ def check_hashes(password, hashed_text):
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
 
+# Tablolar
 cursor.execute('CREATE TABLE IF NOT EXISTS kullanicilar (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici_adi TEXT UNIQUE, sifre TEXT, rol TEXT)')
 cursor.execute('CREATE TABLE IF NOT EXISTS hesaplar (id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT, isim TEXT, detay TEXT)')
 cursor.execute('CREATE TABLE IF NOT EXISTS islemler (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, tur TEXT, tutar REAL, departman TEXT, aciklama TEXT, dekont TEXT, durum TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 cursor.execute('CREATE TABLE IF NOT EXISTS sistem_loglari (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, islem TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
-cursor.execute('CREATE TABLE IF NOT EXISTS api_anahtarlari (id INTEGER PRIMARY KEY AUTOINCREMENT, sirket_adi TEXT, api_key TEXT UNIQUE, olusturma_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
+cursor.execute('CREATE TABLE IF NOT EXISTS api_anahtarlari (id INTEGER PRIMARY KEY AUTOINCREMENT, sirket_adi TEXT, api_key TEXT UNIQUE, webhook_url TEXT, gunluk_limit REAL, olusturma_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 conn.commit()
 
 cursor.execute("SELECT * FROM kullanicilar WHERE kullanici_adi = 'admin'")
@@ -79,7 +79,7 @@ else:
     st.markdown("---")
 
     if st.session_state['role'] == 'Yönetici':
-        tab_listesi = ["🏠 Ana Sayfa", "💳 Cüzdanlar", "➕ Talep Oluştur", "🔔 Gelen Talepler & Onay", "📊 Geçmiş & Filtreler", "🔑 Partner API Entegrasyonu", "👥 Personel Yönetimi", "🛡️ Sistem Logları"]
+        tab_listesi = ["🏠 Ana Sayfa", "💳 Cüzdanlar", "➕ Talep Oluştur", "🔔 Gelen Talepler & Onay", "📊 Geçmiş & Filtreler", "🔑 Partner API & Kotalar", "👥 Personel Yönetimi", "🛡️ Sistem Logları"]
     else:
         tab_listesi = ["🏠 Ana Sayfa", "💳 Cüzdanlar", "➕ Talep Oluştur", "📊 Geçmiş İşlemler"]
 
@@ -211,26 +211,29 @@ else:
                 st.info("Kayıt bulunamadı.")
 
         with sekmeler[5]:
-            st.subheader("🔑 Partner Şirket API Anahtarı")
+            st.subheader("🔑 Partner API Anahtarları, Webhook ve İşlem Kotaları")
             with st.form("api_form"):
                 s_adi = st.text_input("Partner Şirket Adı")
-                if st.form_submit_button("API Key Üret"):
+                w_url = st.text_input("Partner Webhook URL (Bildirim Gönderilecek Adres)")
+                g_limit = st.number_input("Günlük İşlem Tutar Limiti (TL/USDT)", min_value=0.0, step=10000.0, value=100000.0)
+                if st.form_submit_button("API Key ve Kota Tanımla"):
                     if s_adi:
                         yeni_key = "pk_" + secrets.token_hex(16)
-                        cursor.execute("INSERT INTO api_anahtarlari (sirket_adi, api_key) VALUES (?, ?)", (s_adi, yeni_key))
+                        cursor.execute("INSERT INTO api_anahtarlari (sirket_adi, api_key, webhook_url, gunluk_limit) VALUES (?, ?, ?, ?)", (s_adi, yeni_key, w_url, g_limit))
                         conn.commit()
-                        st.success(f"'{s_adi}' için API Key üretildi!")
+                        st.success(f"'{s_adi}' için API Key ve kotalar başarıyla oluşturuldu!")
                     else:
                         st.error("Şirket adı girin.")
                         
             st.markdown("---")
-            cursor.execute("SELECT id, sirket_adi, api_key, olusturma_tarihi FROM api_anahtarlari")
+            st.subheader("📋 Aktif Partnerler ve Kotaları")
+            cursor.execute("SELECT id, sirket_adi, api_key, webhook_url, gunluk_limit, olusturma_tarihi FROM api_anahtarlari")
             apiler = cursor.fetchall()
             if apiler:
                 for api in apiler:
-                    st.info(f"🏢 **{api[1]}** | API Key: `{api[2]}`")
+                    st.info(f"🏢 **{api[1]}** | Key: `{api[2]}` | Webhook: `{api[3] or 'Tanımsız'}` | Günlük Limit: `{api[4]:,.2f}`")
             else:
-                st.warning("API anahtarı yok.")
+                st.warning("Kayıtlı partner API yok.")
 
         with sekmeler[6]:
             st.subheader("👥 Personel Yönetimi")
