@@ -87,9 +87,13 @@ else:
     with sekmeler[0]:
         st.subheader("📊 Genel Finansal Özet (Onaylanan İşlemler)")
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Yatırım' AND durum = 'Onaylandı'")
-        t_yatirim = cursor.fetchone()[0] or 0.0
+        res_yat = cursor.fetchone()
+        t_yatirim = res_yat[0] if res_yat and res_yat[0] is not None else 0.0
+        
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Çekim' AND durum = 'Onaylandı'")
-        t_cekim = cursor.fetchone()[0] or 0.0
+        res_cek = cursor.fetchone()
+        t_cekim = res_cek[0] if res_cek and res_cek[0] is not None else 0.0
+        
         net = t_yatirim - t_cekim
 
         c1, c2, c3 = st.columns(3)
