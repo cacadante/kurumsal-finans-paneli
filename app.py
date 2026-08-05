@@ -13,33 +13,18 @@ def check_hashes(password, hashed_text):
         return True
     return False
 
-# Çoklu Kaynaklı Kesintisiz Canlı Kur Fonksiyonu
+# Kesintisiz Kur Çekme (Güncel Serbest Piyasa Kaynağı)
 def canli_kur_getir():
-    # 1. Alternatif: Binance TR / Global
     try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=USDTTRY"
-        res = requests.get(url, timeout=2).json()
-        if 'price' in res:
-            return float(res['price'])
+        # Açık kur servisinden USD/TRY kurunu çekiyoruz (USDT genellikle USD'ye çok yakın veya eşittir)
+        url = "https://open.er-api.com/v6/latest/USD"
+        res = requests.get(url, timeout=3).json()
+        if 'rates' in res and 'TRY' in res['rates']:
+            return float(res['rates']['TRY'])
     except:
         pass
-
-    # 2. Alternatif: Coincap API (Asla engellenmez)
-    try:
-        url = "https://api.coincap.io/v2/rates/tether"
-        res = requests.get(url, timeout=2).json()
-        # Coincap USDT fiyatını USD cinsinden verir, TR fiyatı için TRY rate ile çarpıyoruz
-        rate_usd = float(res['data']['rateUsd'])
-        
-        url_try = "https://api.coincap.io/v2/rates/turkish-lira"
-        res_try = requests.get(url_try, timeout=2).json()
-        rate_try = float(res_try['data']['rateUsd'])
-        
-        return rate_try / rate_usd
-    except:
-        pass
-
-    return 36.50 # Son yedek değer
+    
+    return 36.50
 
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
@@ -88,7 +73,7 @@ else:
     col_baslik.title("🏢 Kurumsal Finans Paneli")
     
     kur = canli_kur_getir()
-    col_kur.metric("⚡ Canlı USDT/TRY Kuru", f"{kur:.2f} ₺")
+    col_kur.metric("⚡ Canlı USDT / USD / TRY Kuru", f"{kur:.2f} ₺")
     
     if col_cikis.button("🚪 Çıkış Yap"):
         st.session_state['logged_in'] = False
