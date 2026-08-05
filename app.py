@@ -133,14 +133,6 @@ else:
         c2.metric("🔴 Toplam Çekim", f"{t_cekim:,.2f} TL/USDT")
         c3.metric("💰 Net Kasa / Bakiye", f"{net:,.2f} TL/USDT")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("📈 Departman Bazlı Harcama Dağılımı")
-        df_g = pd.read_sql_query("SELECT departman, SUM(tutar) as toplam FROM islemler WHERE durum = 'Onaylandı' GROUP BY departman", conn)
-        if not df_g.empty:
-            st.bar_chart(df_g.set_index('departman'), use_container_width=True)
-        else:
-            st.info("Grafik için henüz onaylanmış işlem bulunmuyor.")
-
     # 2. Sekme: Cüzdanlar
     with sekmeler[1]:
         st.subheader("💳 Şirket IBAN & Kripto Cüzdan Yönetimi")
@@ -252,6 +244,6 @@ else:
             df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler ORDER BY id DESC", conn)
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
-                st.download_button("📥 Excel / CSV Olarak İndir", df.to_csv(index=False).encode('utf-8'), "kurumsal_finans_raporu.csv", "text/csv")
+                st.download_button("📥 Excel / CSV Olarak İndir", df.to_csv(index=False).encode('utf-8'), "kurumsal_finans_raporu.csv", "text/css")
             else:
                 st.info("Kayıt bulunamadı.")
