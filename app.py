@@ -3,85 +3,6 @@ import sqlite3
 import pandas as pd
 import hashlib
 import secrets
-import threading
-import uvicorn
-from fastapi import FastAPI, HTTPException, Header, Depends
-from pydantic import BaseModel
-import requests as req_lib
-
-# --- FASTAPI UYGULAMASI (Arka Uç / API Gateway) ---
-api_app = FastAPI(title="Kurumsal Finans Gateway")
-
-def get_db():
-    db = sqlite3.connect('finance_panel.db', check_same_thread=False)
-    try:
-        yield db
-    finally:
-        db.close()
-
-class TalepModel(BaseModel):
-    tur: str
-    tutar: float
-    departman: str
-    aciklama: str = ""
-
-@api_app.post("/api/talep-olustur")
-def api_talep_olustur(talep: TalepModel, authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Geçersiz veya eksik API Key formatı.")
-    
-    api_key = authorization.split(" ")[1]
-    
-    conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT sirket_adi, webhook_url, gunluk_limit FROM api_anahtarlari WHERE api_key = ?", (api_key,))
-    sirket = cursor.fetchone()
-    
-    if not sirket:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Geçersiz API Anahtarı.")
-    
-    sirket_adi, webhook_url, gunluk_limit = sirket
-    
-    # Günlük limit kontrolü
-    cursor.execute("SELECT SUM(tutar) FROM islemler WHERE kullanici = ? AND date(tarih) = date('now')", (sirket_adi,))
-    bugun_toplam = cursor.fetchone()[0] or 0.0
-    
-    if bugun_toplam + talep.tutar > gunluk_limit:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Günlük işlem tutar limiti aşıldı.")
-    
-    # Talebi kaydet
-    cursor.execute(
-        "INSERT INTO islemler (kullanici, tur, tutar, departman, aciklama, dekont, durum) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (sirket_adi, talep.tur, talep.tutar, talep.departman, talep.aciklama, "API Entegrasyonu", "Beklemede")
-    )
-    conn.commit()
-    islem_id = cursor.lastrowid
-    conn.close()
-    
-    return {"durum": "Basarili", "mesaj": "Talep başarıyla oluşturuldu ve onay bekliyor.", "islem_id": islem_id, "sirket": sirket_adi}
-
-# Arka planda FastAPI sunucusunu çalıştıran thread fonksiyonu
-def run_fastapi():
-    uvicorn.run(api_app, host="0.0.0.0", port=8000, log_level="warning")
-
-@st.cache_resource
-def start_server():
-    t = threading.Thread(target=run_fastapi, daemon=True)
-    t.start()
-
-start_server()
-
-# --- STREAMLIT ARAYÜZÜ ---
-def make_hashes(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return True
-    return False
 
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
@@ -92,6 +13,14 @@ cursor.execute('CREATE TABLE IF NOT EXISTS islemler (id INTEGER PRIMARY KEY AUTO
 cursor.execute('CREATE TABLE IF NOT EXISTS sistem_loglari (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, islem TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 cursor.execute('CREATE TABLE IF NOT EXISTS api_anahtarlari (id INTEGER PRIMARY KEY AUTOINCREMENT, sirket_adi TEXT, api_key TEXT UNIQUE, webhook_url TEXT, gunluk_limit REAL, olusturma_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 conn.commit()
+
+def make_hashes(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password, hashed_text):
+    if make_hashes(password) == hashed_text:
+        return True
+    return False
 
 cursor.execute("SELECT * FROM kullanicilar WHERE kullanici_adi = 'admin'")
 if not cursor.fetchone():
@@ -204,7 +133,7 @@ else:
 
     if st.session_state['role'] == 'Yönetici':
         with sekmeler[3]:
-            st.subheader("🔔 Kademeli Onay Merkezi (Maker-Checker & Webhook Tetikleyici)")
+            st.subheader("🔔 Kademeli Onay Merkezi (Maker-Checker)")
             cursor.execute("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, tarih, durum FROM islemler WHERE durum LIKE 'Beklemede%' ORDER BY id DESC")
             bekleyenler = cursor.fetchall()
             
@@ -218,21 +147,11 @@ else:
                         
                         col_onay, col_ret, _ = st.columns([1, 1, 4])
                         with col_onay:
-                            if st.button("✅ Onayla ve Webhook Gönder", key=f"onay_{b_id}"):
+                            if st.button("✅ Onayla", key=f"onay_{b_id}"):
                                 cursor.execute("UPDATE islemler SET durum = 'Onaylandı' WHERE id = ?", (b_id,))
                                 cursor.execute("INSERT INTO sistem_loglari (kullanici, islem) VALUES (?, ?)", (st.session_state['username'], f"Talep Onaylandı (#{b_id})"))
                                 conn.commit()
-                                
-                                # Eğer talep bir partner şirketten geldiyse ve webhook URL'i varsa tetikle
-                                cursor.execute("SELECT webhook_url FROM api_anahtarlari WHERE sirket_adi = ?", (b_kul,))
-                                wh_res = cursor.fetchone()
-                                if wh_res and wh_res[0]:
-                                    try:
-                                        req_lib.post(wh_res[0], json={"islem_id": b_id, "durum": "Onaylandi", "tutar": b_tutar}, timeout=3)
-                                    except:
-                                        pass
-                                        
-                                st.success(f"#{b_id} numaralı talep onaylandı ve partner sisteme webhook bildirimi gönderildi!")
+                                st.success(f"#{b_id} numaralı talep onaylandı!")
                                 st.rerun()
                         with col_ret:
                             if st.button("❌ Reddet", key=f"ret_{b_id}"):
@@ -277,29 +196,28 @@ else:
                 st.info("Kayıt bulunamadı.")
 
         with sekmeler[5]:
-            st.subheader("🔑 Partner API Anahtarları, Webhook ve İşlem Kotaları")
+            st.subheader("🔑 Partner API Anahtarları ve Kotalar")
             with st.form("api_form"):
                 s_adi = st.text_input("Partner Şirket Adı")
-                w_url = st.text_input("Partner Webhook URL (Onaylanınca Bildirim Gidecek Adres)")
-                g_limit = st.number_input("Günlük İşlem Tutar Limiti (TL/USDT)", min_value=0.0, step=10000.0, value=100000.0)
-                if st.form_submit_button("API Key ve Kota Tanımla"):
+                w_url = st.text_input("Webhook URL")
+                g_limit = st.number_input("Günlük Limit (TL/USDT)", min_value=0.0, step=10000.0, value=100000.0)
+                if st.form_submit_button("API Key Üret"):
                     if s_adi:
                         yeni_key = "pk_" + secrets.token_hex(16)
                         cursor.execute("INSERT INTO api_anahtarlari (sirket_adi, api_key, webhook_url, gunluk_limit) VALUES (?, ?, ?, ?)", (s_adi, yeni_key, w_url, g_limit))
                         conn.commit()
-                        st.success(f"'{s_adi}' için API Key ve kotalar başarıyla oluşturuldu!")
+                        st.success(f"'{s_adi}' için API Key üretildi!")
                     else:
                         st.error("Şirket adı girin.")
                         
             st.markdown("---")
-            st.subheader("📋 Aktif Partnerler ve Kotaları")
-            cursor.execute("SELECT id, sirket_adi, api_key, webhook_url, gunluk_limit, olusturma_tarihi FROM api_anahtarlari")
+            cursor.execute("SELECT id, sirket_adi, api_key, webhook_url, gunluk_limit FROM api_anahtarlari")
             apiler = cursor.fetchall()
             if apiler:
                 for api in apiler:
-                    st.info(f"🏢 **{api[1]}** | Key: `{api[2]}` | Webhook: `{api[3] or 'Tanımsız'}` | Günlük Limit: `{api[4]:,.2f}`")
+                    st.info(f"🏢 **{api[1]}** | Key: `{api[2]}` | Limit: `{api[4]:,.2f}`")
             else:
-                st.warning("Kayıtlı partner API yok.")
+                st.warning("API anahtarı yok.")
 
         with sekmeler[6]:
             st.subheader("👥 Personel Yönetimi")
