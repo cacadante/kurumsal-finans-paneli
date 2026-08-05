@@ -2,7 +2,6 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import hashlib
-import requests
 from datetime import date
 
 def make_hashes(password):
@@ -12,16 +11,6 @@ def check_hashes(password, hashed_text):
     if make_hashes(password) == hashed_text:
         return True
     return False
-
-def canli_kur_getir():
-    try:
-        url = "https://open.er-api.com/v6/latest/USD"
-        res = requests.get(url, timeout=3).json()
-        if 'rates' in res and 'TRY' in res['rates']:
-            return float(res['rates']['TRY'])
-    except:
-        pass
-    return 36.50
 
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
@@ -66,11 +55,8 @@ if not st.session_state['logged_in']:
             else:
                 st.error("Hatalı kullanıcı adı veya şifre!")
 else:
-    col_baslik, col_kur, col_cikis = st.columns([5, 3, 2])
+    col_baslik, col_cikis = st.columns([8, 2])
     col_baslik.title("🏢 Kurumsal Finans & Onay Paneli")
-    
-    kur = canli_kur_getir()
-    col_kur.metric("⚡ Canlı USDT / USD / TRY Kuru", f"{kur:.2f} ₺")
     
     if col_cikis.button("🚪 Çıkış Yap"):
         st.session_state['logged_in'] = False
@@ -79,16 +65,31 @@ else:
     st.markdown(f"Aktif Kullanıcı: **{st.session_state['username']}** | Rol: `{st.session_state['role']}`")
     st.markdown("---")
 
-    tab_listesi = ["🏠 Ana Sayfa", "💳 Cüzdanlar", "➕ Talep Oluştur", "📊 Geçmiş İşlemler"]
+    # Sekme listesini net bir şekilde oluşturuyoruz
     if st.session_state['role'] == 'Yönetici':
-        tab_listesi.insert(3, "🔔 Gelen Talepler & Onay")
-        tab_listesi.extend(["🎯 Bütçe Yönetimi", "👥 Personel Yönetimi", "🛡️ Sistem Logları"])
+        tab_listesi = [
+            "🏠 Ana Sayfa", 
+            "💳 Cüzdanlar", 
+            "➕ Talep Oluştur", 
+            "🔔 Gelen Talepler & Onay", 
+            "📊 Geçmiş İşlemler", 
+            "🎯 Bütçe Yönetimi", 
+            "👥 Personel Yönetimi", 
+            "🛡️ Sistem Logları"
+        ]
+    else:
+        tab_listesi = [
+            "🏠 Ana Sayfa", 
+            "💳 Cüzdanlar", 
+            "➕ Talep Oluştur", 
+            "📊 Geçmiş İşlemler"
+        ]
 
     sekmeler = st.tabs(tab_listesi)
 
+    # 1. Sekme: Ana Sayfa
     with sekmeler[0]:
         st.subheader("Genel Finansal Özet (Sadece Onaylanan İşlemler)")
-        # Sadece Onaylananlar kasaya/bakiye özetine yansır
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Yatırım' AND durum = 'Onaylandı'")
         t_yatirim = cursor.fetchone()[0] or 0.0
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Çekim' AND durum = 'Onaylandı'")
@@ -120,6 +121,7 @@ else:
         if not df_g.empty:
             st.bar_chart(df_g.set_index('departman'))
 
+    # 2. Sekme: Cüzdanlar
     with sekmeler[1]:
         st.subheader("Şirket IBAN & Kripto Cüzdanlar")
         with st.form("h_form"):
@@ -136,6 +138,7 @@ else:
         for h in cursor.fetchall():
             st.info(f"**[{h[0]}]** {h[1]} : `{h[2]}`")
 
+    # 3. Sekme: Talep Oluştur
     with sekmeler[2]:
         st.subheader("Yeni Yatırım veya Çekim Talebi Gönder")
         with st.form("i_form"):
@@ -148,16 +151,13 @@ else:
             if st.form_submit_button("Onaya Gönder"):
                 if tutar > 0:
                     dosya_adi = dekont_dosya.name if dekont_dosya else "Dekont Yok"
-                    # İlk başta durum 'Beklemede' olarak kaydedilir
                     cursor.execute("INSERT INTO islemler (kullanici, tur, tutar, departman, aciklama, dekont, durum) VALUES (?, ?, ?, ?, ?, ?, ?)", 
                                    (st.session_state['username'], i_tur, tutar, dept, notlar, dosya_adi, "Beklemede"))
                     conn.commit()
                     st.success("Talebiniz başarıyla yönetici onayına gönderildi!")
 
-    # Eğer yönetici ise Onay Sekmesi araya girer
-    yonetici_offset = 0
+    # Eğer yönetici ise Onay Sekmesi (4. Sekme)
     if st.session_state['role'] == 'Yönetici':
-        yonetici_offset = 1
         with sekmeler[3]:
             st.subheader("🔔 Bekleyen Yatırım ve Çekim Talepleri (Onay Merkezi)")
             st.write("Şirketlerden veya çalışanlardan gelen talepleri buradan inceleyip onaylayabilir veya reddedebilirsiniz.")
@@ -192,17 +192,18 @@ else:
             else:
                 st.info("Şu an onay bekleyen yeni bir talep bulunmuyor.")
 
-    with sekmeler[4 + yonetici_offset]:
-        st.subheader("Tüm İşlem Geçmişi (Onaylı / Bekleyen / Reddedilen)")
-        df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler ORDER BY id DESC", conn)
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
-            st.download_button("📥 Excel / CSV Olarak İndir", df.to_csv(index=False).encode('utf-8'), "kurumsal_finans_raporu.csv", "text/csv")
-        else:
-            st.info("Kayıt bulunamadı.")
+        # 5. Sekme: Geçmiş İşlemler
+        with sekmeler[4]:
+            st.subheader("Tüm İşlem Geçmişi (Onaylı / Bekleyen / Reddedilen)")
+            df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler ORDER BY id DESC", conn)
+            if not df.empty:
+                st.dataframe(df, use_container_width=True)
+                st.download_button("📥 Excel / CSV Olarak İndir", df.to_csv(index=False).encode('utf-8'), "kurumsal_finans_raporu.csv", "text/csv")
+            else:
+                st.info("Kayıt bulunamadı.")
 
-    if st.session_state['role'] == 'Yönetici':
-        with sekmeler[5 + yonetici_offset]:
+        # 6. Sekme: Bütçe Yönetimi
+        with sekmeler[5]:
             st.subheader("Departman Bütçe Limitleri Belirle")
             with st.form("butce_form"):
                 b_dept = st.selectbox("Hedef Departman", ["Pazarlama", "Yazılım / Teknoloji", "Operasyon", "Likidite / Finans", "Yönetim"])
@@ -212,7 +213,8 @@ else:
                     conn.commit()
                     st.success(f"{b_dept} için limit güncellendi!")
 
-        with sekmeler[6 + yonetici_offset]:
+        # 7. Sekme: Personel Yönetimi
+        with sekmeler[6]:
             st.subheader("Personel Ekle")
             with st.form("p_form"):
                 pk = st.text_input("Kullanıcı Adı")
@@ -230,10 +232,21 @@ else:
             for p in cursor.fetchall():
                 st.markdown(f"👤 **{p[0]}** ({p[1]})")
 
-        with sekmeler[7 + yonetici_offset]:
+        # 8. Sekme: Sistem Logları
+        with sekmeler[7]:
             st.subheader("Sistem Logları ve Güvenli Veritabanı Yedeği")
             with open("finance_panel.db", "rb") as db_file:
                 st.download_button("💾 Veritabanını Yedekle (.db)", db_file, "finance_panel_yedek.db", "application/octet-stream")
             st.markdown("---")
             df_l = pd.read_sql_query("SELECT * FROM sistem_loglari ORDER BY id DESC", conn)
             st.dataframe(df_l, use_container_width=True)
+    else:
+        # Çalışanlar için Geçmiş İşlemler sekmesi (4. sekme)
+        with sekmeler[3]:
+            st.subheader("Tüm İşlem Geçmişi (Onaylı / Bekleyen / Reddedilen)")
+            df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler ORDER BY id DESC", conn)
+            if not df.empty:
+                st.dataframe(df, use_container_width=True)
+                st.download_button("📥 Excel / CSV Olarak İndir", df.to_csv(index=False).encode('utf-8'), "kurumsal_finans_raporu.csv", "text/csv")
+            else:
+                st.info("Kayıt bulunamadı.")
