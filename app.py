@@ -2,7 +2,6 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import hashlib
-from datetime import date
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
@@ -20,7 +19,6 @@ cursor.execute('CREATE TABLE IF NOT EXISTS kullanicilar (id INTEGER PRIMARY KEY 
 cursor.execute('CREATE TABLE IF NOT EXISTS hesaplar (id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT, isim TEXT, detay TEXT)')
 cursor.execute('CREATE TABLE IF NOT EXISTS islemler (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, tur TEXT, tutar REAL, departman TEXT, aciklama TEXT, dekont TEXT, durum TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 cursor.execute('CREATE TABLE IF NOT EXISTS sistem_loglari (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, islem TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
-cursor.execute('CREATE TABLE IF NOT EXISTS butceler (departman TEXT UNIQUE, limit_tutar REAL)')
 conn.commit()
 
 cursor.execute("SELECT * FROM kullanicilar WHERE kullanici_adi = 'admin'")
@@ -30,7 +28,7 @@ if not cursor.fetchone():
 
 st.set_page_config(page_title="Kurumsal Finans ve Onay Paneli", page_icon="💼", layout="wide")
 
-# Gelişmiş Kurumsal UI & Şık Kart Tasarımı için Özel CSS
+# Modern UI & CSS
 st.markdown("""
     <style>
     .main {
@@ -41,7 +39,7 @@ st.markdown("""
         padding: 20px;
         border-radius: 12px;
         border: 1px solid #374151;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
@@ -108,7 +106,6 @@ else:
             "➕ Talep Oluştur", 
             "🔔 Gelen Talepler & Onay", 
             "📊 Geçmiş İşlemler", 
-            "🎯 Bütçe Yönetimi", 
             "👥 Personel Yönetimi", 
             "🛡️ Sistem Logları"
         ]
@@ -137,25 +134,12 @@ else:
         c3.metric("💰 Net Kasa / Bakiye", f"{net:,.2f} TL/USDT")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("🎯 Departman Bütçe ve Harcama Durumları")
-        cursor.execute("SELECT departman, limit_tutar FROM butceler")
-        butceler = cursor.fetchall()
-        
-        if butceler:
-            for dept, limit in butceler:
-                cursor.execute("SELECT SUM(tutar) FROM islemler WHERE departman = ? AND tur = 'Çekim' AND durum = 'Onaylandı'", (dept,))
-                harcanan = cursor.fetchone()[0] or 0.0
-                yuzde = min(harcanan / limit, 1.0) if limit > 0 else 0.0
-                st.write(f"**{dept}** (Harcanan: {harcanan:,.2f} TL / Limit: {limit:,.2f} TL)")
-                st.progress(yuzde)
-        else:
-            st.info("Henüz tanımlanmış bir bütçe limiti bulunmuyor.")
-
-        st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("📈 Departman Bazlı Harcama Dağılımı")
         df_g = pd.read_sql_query("SELECT departman, SUM(tutar) as toplam FROM islemler WHERE durum = 'Onaylandı' GROUP BY departman", conn)
         if not df_g.empty:
             st.bar_chart(df_g.set_index('departman'), use_container_width=True)
+        else:
+            st.info("Grafik için henüz onaylanmış işlem bulunmuyor.")
 
     # 2. Sekme: Cüzdanlar
     with sekmeler[1]:
@@ -193,7 +177,7 @@ else:
                     conn.commit()
                     st.success("Talebiniz başarıyla yönetici onayına gönderildi!")
 
-    # Yönetici Onay ve Diğer Sekmeler
+    # Yönetici ve Çalışan Sekmeleri
     if st.session_state['role'] == 'Yönetici':
         with sekmeler[3]:
             st.subheader("🔔 Bekleyen Yatırım ve Çekim Talepleri (Onay Merkezi)")
@@ -237,16 +221,6 @@ else:
                 st.info("Kayıt bulunamadı.")
 
         with sekmeler[5]:
-            st.subheader("🎯 Departman Bütçe Limitleri")
-            with st.form("butce_form"):
-                b_dept = st.selectbox("Hedef Departman", ["Pazarlama", "Yazılım / Teknoloji", "Operasyon", "Likidite / Finans", "Yönetim"])
-                b_limit = st.number_input("Aylık Harcama Limiti (TL/USDT)", min_value=0.0, step=1000.0)
-                if st.form_submit_button("Bütçe Limitini Kaydet"):
-                    cursor.execute("INSERT OR REPLACE INTO butceler (departman, limit_tutar) VALUES (?, ?)", (b_dept, b_limit))
-                    conn.commit()
-                    st.success(f"{b_dept} için limit güncellendi!")
-
-        with sekmeler[6]:
             st.subheader("👥 Personel Yönetimi")
             with st.form("p_form"):
                 pk = st.text_input("Kullanıcı Adı")
@@ -265,7 +239,7 @@ else:
             for p in cursor.fetchall():
                 st.markdown(f"👤 **{p[0]}** ({p[1]},{' Yönetici' if p[1]=='Yönetici' else ' Çalışan'})")
 
-        with sekmeler[7]:
+        with sekmeler[6]:
             st.subheader("🛡️ Sistem Logları ve Veritabanı Yedeği")
             with open("finance_panel.db", "rb") as db_file:
                 st.download_button("💾 Tüm Veritabanını Yedekle (.db)", db_file, "finance_panel_yedek.db", "application/octet-stream")
