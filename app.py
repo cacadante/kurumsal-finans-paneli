@@ -13,14 +13,33 @@ def check_hashes(password, hashed_text):
         return True
     return False
 
-# Canlı USDT/TRY kuru çekme fonksiyonu
+# Çoklu Kaynaklı Kesintisiz Canlı Kur Fonksiyonu
 def canli_kur_getir():
+    # 1. Alternatif: Binance TR / Global
     try:
         url = "https://api.binance.com/api/v3/ticker/price?symbol=USDTTRY"
-        res = requests.get(url, timeout=3).json()
-        return float(res['price'])
+        res = requests.get(url, timeout=2).json()
+        if 'price' in res:
+            return float(res['price'])
     except:
-        return 34.50 # Yedek kur
+        pass
+
+    # 2. Alternatif: Coincap API (Asla engellenmez)
+    try:
+        url = "https://api.coincap.io/v2/rates/tether"
+        res = requests.get(url, timeout=2).json()
+        # Coincap USDT fiyatını USD cinsinden verir, TR fiyatı için TRY rate ile çarpıyoruz
+        rate_usd = float(res['data']['rateUsd'])
+        
+        url_try = "https://api.coincap.io/v2/rates/turkish-lira"
+        res_try = requests.get(url_try, timeout=2).json()
+        rate_try = float(res_try['data']['rateUsd'])
+        
+        return rate_try / rate_usd
+    except:
+        pass
+
+    return 36.50 # Son yedek değer
 
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
@@ -199,7 +218,6 @@ else:
         with sekmeler[6]:
             st.subheader("Sistem Logları ve Güvenli Veritabanı Yedeği")
             
-            # Veritabanı indirme butonu
             with open("finance_panel.db", "rb") as db_file:
                 st.download_button(
                     label="💾 Tüm Veritabanını Yedekle (.db İndir)",
