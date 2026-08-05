@@ -5,6 +5,29 @@ import pandas as pd
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
 
+# Tabloları garanti olması için ana sayfada da oluşturuyoruz
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS hesaplar (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tur TEXT,
+        isim TEXT,
+        detay TEXT
+    )
+''')
+
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS islemler (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kullanici TEXT,
+        tur TEXT,
+        tutar REAL,
+        departman TEXT,
+        aciklama TEXT,
+        tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+''')
+conn.commit()
+
 st.set_page_config(page_title="Kurumsal Finans Paneli", page_icon="💼", layout="wide")
 
 st.title("🏢 Kurumsal Finans ve Cüzdan Yönetim Paneli")
