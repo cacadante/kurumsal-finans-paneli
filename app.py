@@ -4,6 +4,20 @@ import pandas as pd
 import hashlib
 import secrets
 
+# Sol menüyü ve çoklu sayfa görünümünü tamamen gizleyen CSS
+st.set_page_config(page_title="Kurumsal Finans ve API Gateway", page_icon="💼", layout="wide", initial_sidebar_state="collapsed")
+
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { display: none; }
+    .main { background-color: #0b0f19; }
+    .stMetric { background: linear-gradient(135deg, #1f2937 0%, #111827 100%); padding: 20px; border-radius: 12px; border: 1px solid #374151; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #111827; padding: 10px; border-radius: 10px; }
+    .stTabs [data-baseweb="tab"] { background-color: #1f2937; border-radius: 6px; color: white; padding: 8px 16px; font-weight: 500; }
+    .stTabs [aria-selected="true"] { background-color: #2563eb !important; }
+    </style>
+""", unsafe_allow_html=True)
+
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
 
@@ -27,18 +41,6 @@ if not cursor.fetchone():
     cursor.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol) VALUES (?, ?, ?)", ('admin', make_hashes('123456'), 'Yönetici'))
     conn.commit()
 
-st.set_page_config(page_title="Kurumsal Finans ve API Gateway", page_icon="💼", layout="wide")
-
-st.markdown("""
-    <style>
-    .main { background-color: #0b0f19; }
-    .stMetric { background: linear-gradient(135deg, #1f2937 0%, #111827 100%); padding: 20px; border-radius: 12px; border: 1px solid #374151; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #111827; padding: 10px; border-radius: 10px; }
-    .stTabs [data-baseweb="tab"] { background-color: #1f2937; border-radius: 6px; color: white; padding: 8px 16px; font-weight: 500; }
-    .stTabs [aria-selected="true"] { background-color: #2563eb !important; }
-    </style>
-""", unsafe_allow_html=True)
-
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'username' not in st.session_state:
@@ -46,11 +48,13 @@ if 'username' not in st.session_state:
 if 'role' not in st.session_state:
     st.session_state['role'] = ''
 
+# GİRİŞ YAPILMAMIŞSA KESİNLİKLE İÇERİ GÖSTERME
 if not st.session_state['logged_in']:
     st.markdown("<br><br>", unsafe_allow_html=True)
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
-        st.markdown("## 🔐 Kurumsal Panel Giriş Ekranı")
+        st.markdown("## 🔐 Kurumsal Panel Güvenli Giriş")
+        st.write("Devam etmek için lütfen giriş yapın.")
         with st.form("login_form"):
             k_adi = st.text_input("Kullanıcı Adı")
             sifre = st.text_input("Şifre", type="password")
@@ -72,6 +76,8 @@ else:
     
     if col_cikis.button("🚪 Çıkış Yap", use_container_width=True):
         st.session_state['logged_in'] = False
+        st.session_state['username'] = ''
+        st.session_state['role'] = ''
         st.rerun()
 
     st.markdown(f"👤 Aktif Kullanıcı: **{st.session_state['username']}** &nbsp;|&nbsp; 🛡️ Rol: `{st.session_state['role']}`")
