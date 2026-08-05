@@ -2,6 +2,8 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import hashlib
+import requests
+from datetime import date
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
@@ -11,14 +13,24 @@ def check_hashes(password, hashed_text):
         return True
     return False
 
+# Canlı USDT/TRY kuru çekme fonksiyonu
+def canli_kur_getir():
+    try:
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=USDTTRY"
+        res = requests.get(url, timeout=3).json()
+        return float(res['price'])
+    except:
+        return 34.50 # Yedek kur
+
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
 
 # Tablolar
 cursor.execute('CREATE TABLE IF NOT EXISTS kullanicilar (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici_adi TEXT UNIQUE, sifre TEXT, rol TEXT)')
 cursor.execute('CREATE TABLE IF NOT EXISTS hesaplar (id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT, isim TEXT, detay TEXT)')
-cursor.execute('CREATE TABLE IF NOT EXISTS islemler (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, tur TEXT, tutar REAL, departman TEXT, aciklama TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
+cursor.execute('CREATE TABLE IF NOT EXISTS islemler (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, tur TEXT, tutar REAL, departman TEXT, aciklama TEXT, dekont TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 cursor.execute('CREATE TABLE IF NOT EXISTS sistem_loglari (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, islem TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
+cursor.execute('CREATE TABLE IF NOT EXISTS butceler (departman TEXT UNIQUE, limit_tutar REAL)')
 conn.commit()
 
 cursor.execute("SELECT * FROM kullanicilar WHERE kullanici_adi = 'admin'")
@@ -53,8 +65,12 @@ if not st.session_state['logged_in']:
             else:
                 st.error("Hatalı kullanıcı adı veya şifre!")
 else:
-    col_baslik, col_cikis = st.columns([8, 2])
-    col_baslik.title("🏢 Kurumsal Finans ve Cüzdan Yönetim Paneli")
+    col_baslik, col_kur, col_cikis = st.columns([5, 3, 2])
+    col_baslik.title("🏢 Kurumsal Finans Paneli")
+    
+    kur = canli_kur_getir()
+    col_kur.metric("⚡ Canlı USDT/TRY Kuru", f"{kur:.2f} ₺")
+    
     if col_cikis.button("🚪 Çıkış Yap"):
         st.session_state['logged_in'] = False
         st.rerun()
@@ -62,15 +78,14 @@ else:
     st.markdown(f"Aktif Kullanıcı: **{st.session_state['username']}** | Rol: `{st.session_state['role']}`")
     st.markdown("---")
 
-    # Üst Sekmeler Sistemi (Asla kaybolmaz, her şey elinin altında)
     tab_listesi = ["🏠 Ana Sayfa", "💳 Cüzdanlar", "➕ İşlem Ekle", "📊 Geçmiş & Raporlar"]
     if st.session_state['role'] == 'Yönetici':
-        tab_listesi.extend(["👥 Personel Yönetimi", "🛡️ Sistem Logları"])
+        tab_listesi.extend(["🎯 Bütçe Yönetimi", "👥 Personel Yönetimi", "🛡️ Sistem Logları"])
 
     sekmeler = st.tabs(tab_listesi)
 
     with sekmeler[0]:
-        st.subheader("Genel Finansal Özet")
+        st.subheader("Genel Finansal Özet ve Departman Limitleri")
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Yatırım'")
         t_yatirim = cursor.fetchone()[0] or 0.0
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Çekim'")
@@ -82,12 +97,25 @@ else:
         c2.metric("🔴 Toplam Çekim", f"{t_cekim:,.2f} TL/USDT")
         c3.metric("💰 Net Kasa", f"{net:,.2f} TL/USDT")
 
-        st.write("---")
+        st.markdown("---")
+        st.subheader("🎯 Departman Bütçe ve Harcama Durumları")
+        cursor.execute("SELECT departman, limit_tutar FROM butceler")
+        butceler = cursor.fetchall()
+        
+        if butceler:
+            for dept, limit in butceler:
+                cursor.execute("SELECT SUM(tutar) FROM islemler WHERE departman = ? AND tur = 'Çekim'", (dept,))
+                harcanan = cursor.fetchone()[0] or 0.0
+                yuzde = min(harcanan / limit, 1.0) if limit > 0 else 0.0
+                st.write(f"**{dept}** (Harcanan: {harcanan:,.2f} TL / Limit: {limit:,.2f} TL)")
+                st.progress(yuzde)
+        else:
+            st.info("Henüz tanımlanmış bir bütçe limiti yok. Yönetici panelinden ekleyebilirsiniz.")
+
+        st.markdown("---")
         df_g = pd.read_sql_query("SELECT departman, SUM(tutar) as toplam FROM islemler GROUP BY departman", conn)
         if not df_g.empty:
             st.bar_chart(df_g.set_index('departman'))
-        else:
-            st.info("Grafik için henüz veri yok.")
 
     with sekmeler[1]:
         st.subheader("Şirket IBAN & Kripto Cüzdanlar")
@@ -106,30 +134,51 @@ else:
             st.info(f"**[{h[0]}]** {h[1]} : `{h[2]}`")
 
     with sekmeler[2]:
-        st.subheader("Yeni Yatırım / Çekim Talebi")
+        st.subheader("Yeni Yatırım / Çekim Talebi ve Dekont Yükleme")
         with st.form("i_form"):
             i_tur = st.radio("İşlem Türü", ["Yatırım", "Çekim"])
             tutar = st.number_input("Tutar", min_value=0.0)
             dept = st.selectbox("Departman", ["Pazarlama", "Yazılım / Teknoloji", "Operasyon", "Likidite / Finans", "Yönetim"])
             notlar = st.text_area("Açıklama / Not")
-            if st.form_submit_button("İşlemi Kaydet"):
+            dekont_dosya = st.file_uploader("Dekont / Fatura Yükle (Opsiyonel)", type=["png", "jpg", "jpeg", "pdf"])
+            
+            if st.form_submit_button("İşlemi Onayla ve Kaydet"):
                 if tutar > 0:
-                    cursor.execute("INSERT INTO islemler (kullanici, tur, tutar, departman, aciklama) VALUES (?, ?, ?, ?, ?)", 
-                                   (st.session_state['username'], i_tur, tutar, dept, notlar))
+                    dosya_adi = dekont_dosya.name if dekont_dosya else "Dekont Yok"
+                    cursor.execute("INSERT INTO islemler (kullanici, tur, tutar, departman, aciklama, dekont) VALUES (?, ?, ?, ?, ?, ?)", 
+                                   (st.session_state['username'], i_tur, tutar, dept, notlar, dosya_adi))
                     conn.commit()
-                    st.success("İşlem başarıyla eklendi!")
+                    st.success("İşlem başarıyla ve dekontuyla birlikte kaydedildi!")
 
     with sekmeler[3]:
-        st.subheader("Geçmiş İşlemler ve Excel Raporu")
-        df = pd.read_sql_query("SELECT * FROM islemler ORDER BY id DESC", conn)
+        st.subheader("Gelişmiş Filtreleme, Raporlar ve Excel İndirme")
+        
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            baslangic = st.date_input("Başlangıç Tarihi", date(2026, 1, 1))
+        with col_t2:
+            bitis = st.date_input("Bitiş Tarihi", date(2030, 12, 31))
+            
+        df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, tarih FROM islemler ORDER BY id DESC", conn)
+        
         if not df.empty:
             st.dataframe(df, use_container_width=True)
-            st.download_button("📥 Excel / CSV İndir", df.to_csv(index=False).encode('utf-8'), "rapor.csv", "text/csv")
+            st.download_button("📥 Excel / CSV Olarak İndir", df.to_csv(index=False).encode('utf-8'), "kurumsal_finans_raporu.csv", "text/csv")
         else:
             st.info("Kayıt bulunamadı.")
 
     if st.session_state['role'] == 'Yönetici':
         with sekmeler[4]:
+            st.subheader("Departman Bütçe Limitleri Belirle")
+            with st.form("butce_form"):
+                b_dept = st.selectbox("Hedef Departman", ["Pazarlama", "Yazılım / Teknoloji", "Operasyon", "Likidite / Finans", "Yönetim"])
+                b_limit = st.number_input("Aylık Harcama Limiti (TL/USDT)", min_value=0.0, step=1000.0)
+                if st.form_submit_button("Bütçe Limitini Kaydet"):
+                    cursor.execute("INSERT OR REPLACE INTO butceler (departman, limit_tutar) VALUES (?, ?)", (b_dept, b_limit))
+                    conn.commit()
+                    st.success(f"{b_dept} için limit {b_limit:,.2f} olarak güncellendi!")
+
+        with sekmeler[5]:
             st.subheader("Personel Ekle")
             with st.form("p_form"):
                 pk = st.text_input("Kullanıcı Adı")
@@ -147,7 +196,18 @@ else:
             for p in cursor.fetchall():
                 st.markdown(f"👤 **{p[0]}** ({p[1]})")
 
-        with sekmeler[5]:
-            st.subheader("Sistem Logları")
+        with sekmeler[6]:
+            st.subheader("Sistem Logları ve Güvenli Veritabanı Yedeği")
+            
+            # Veritabanı indirme butonu
+            with open("finance_panel.db", "rb") as db_file:
+                st.download_button(
+                    label="💾 Tüm Veritabanını Yedekle (.db İndir)",
+                    data=db_file,
+                    file_name="finance_panel_yedek.db",
+                    mime="application/octet-stream"
+                )
+                
+            st.markdown("---")
             df_l = pd.read_sql_query("SELECT * FROM sistem_loglari ORDER BY id DESC", conn)
             st.dataframe(df_l, use_container_width=True)
