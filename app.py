@@ -16,7 +16,6 @@ def check_hashes(password, hashed_text):
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
 
-# Tablolar
 cursor.execute('CREATE TABLE IF NOT EXISTS kullanicilar (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici_adi TEXT UNIQUE, sifre TEXT, rol TEXT)')
 cursor.execute('CREATE TABLE IF NOT EXISTS hesaplar (id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT, isim TEXT, detay TEXT)')
 cursor.execute('CREATE TABLE IF NOT EXISTS islemler (id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, tur TEXT, tutar REAL, departman TEXT, aciklama TEXT, dekont TEXT, durum TEXT, tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
@@ -31,35 +30,13 @@ if not cursor.fetchone():
 
 st.set_page_config(page_title="Kurumsal Finans ve API Gateway", page_icon="💼", layout="wide")
 
-# Modern UI & CSS
 st.markdown("""
     <style>
-    .main {
-        background-color: #0b0f19;
-    }
-    .stMetric {
-        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #374151;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #111827;
-        padding: 10px;
-        border-radius: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #1f2937;
-        border-radius: 6px;
-        color: white;
-        padding: 8px 16px;
-        font-weight: 500;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #2563eb !important;
-    }
+    .main { background-color: #0b0f19; }
+    .stMetric { background: linear-gradient(135deg, #1f2937 0%, #111827 100%); padding: 20px; border-radius: 12px; border: 1px solid #374151; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #111827; padding: 10px; border-radius: 10px; }
+    .stTabs [data-baseweb="tab"] { background-color: #1f2937; border-radius: 6px; color: white; padding: 8px 16px; font-weight: 500; }
+    .stTabs [aria-selected="true"] { background-color: #2563eb !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -75,7 +52,6 @@ if not st.session_state['logged_in']:
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
         st.markdown("## 🔐 Kurumsal Panel Giriş Ekranı")
-        st.write("Lütfen sistemdeki kullanıcı adınız ve şifrenizle giriş yapın.")
         with st.form("login_form"):
             k_adi = st.text_input("Kullanıcı Adı")
             sifre = st.text_input("Şifre", type="password")
@@ -103,27 +79,12 @@ else:
     st.markdown("---")
 
     if st.session_state['role'] == 'Yönetici':
-        tab_listesi = [
-            "🏠 Ana Sayfa", 
-            "💳 Cüzdanlar", 
-            "➕ Talep Oluştur", 
-            "🔔 Gelen Talepler & Onay", 
-            "📊 Geçmiş & Filtreler", 
-            "🔑 Partner API Entegrasyonu", 
-            "👥 Personel Yönetimi", 
-            "🛡️ Sistem Logları"
-        ]
+        tab_listesi = ["🏠 Ana Sayfa", "💳 Cüzdanlar", "➕ Talep Oluştur", "🔔 Gelen Talepler & Onay", "📊 Geçmiş & Filtreler", "🔑 Partner API Entegrasyonu", "👥 Personel Yönetimi", "🛡️ Sistem Logları"]
     else:
-        tab_listesi = [
-            "🏠 Ana Sayfa", 
-            "💳 Cüzdanlar", 
-            "➕ Talep Oluştur", 
-            "📊 Geçmiş İşlemler"
-        ]
+        tab_listesi = ["🏠 Ana Sayfa", "💳 Cüzdanlar", "➕ Talep Oluştur", "📊 Geçmiş İşlemler"]
 
     sekmeler = st.tabs(tab_listesi)
 
-    # 1. Sekme: Ana Sayfa
     with sekmeler[0]:
         st.subheader("📊 Genel Finansal Özet (Onaylanan İşlemler)")
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Yatırım' AND durum = 'Onaylandı'")
@@ -137,7 +98,6 @@ else:
         c2.metric("🔴 Toplam Çekim", f"{t_cekim:,.2f} TL/USDT")
         c3.metric("💰 Net Kasa / Bakiye", f"{net:,.2f} TL/USDT")
 
-    # 2. Sekme: Cüzdanlar
     with sekmeler[1]:
         st.subheader("💳 Şirket IBAN & Kripto Cüzdan Yönetimi")
         with st.form("h_form"):
@@ -155,7 +115,6 @@ else:
         for h in cursor.fetchall():
             st.info(f"**[{h[0]}]** {h[1]} : `{h[2]}`")
 
-    # 3. Sekme: Talep Oluştur
     with sekmeler[2]:
         st.subheader("➕ Yeni Yatırım veya Çekim Talebi Gönder")
         with st.form("i_form"):
@@ -173,12 +132,9 @@ else:
                     conn.commit()
                     st.success("Talebiniz başarıyla yönetici onayına gönderildi!")
 
-    # Yönetici ve Çalışan Sekmeleri
     if st.session_state['role'] == 'Yönetici':
         with sekmeler[3]:
             st.subheader("🔔 Kademeli Onay Merkezi (Maker-Checker)")
-            st.write("50.000 TL / USDT üzeri yüksek hacimli işlemler **Çift Yönetici Onayı** gerektirir.")
-            
             cursor.execute("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, tarih, durum FROM islemler WHERE durum LIKE 'Beklemede%' ORDER BY id DESC")
             bekleyenler = cursor.fetchall()
             
@@ -193,51 +149,48 @@ else:
                         col_onay, col_ret, _ = st.columns([1, 1, 4])
                         with col_onay:
                             if b_tutar > 50000 and b_durum == "Beklemede":
-                                if st.button("🟡 1. Onayı Ver (Yüksek Tutar)", key=f"onay1_{b_id}"):
+                                if st.button("🟡 1. Onayı Ver", key=f"onay1_{b_id}"):
                                     cursor.execute("UPDATE islemler SET durum = '1. Onay Verildi (2. Onay Bekliyor)' WHERE id = ?", (b_id,))
                                     conn.commit()
-                                    st.success(f"#{b_id} için 1. onay verildi, ikinci yönetici onayı bekleniyor.")
+                                    st.success(f"#{b_id} için 1. onay verildi.")
                                     st.rerun()
                             elif b_tutar > 50000 and "1. Onay" in b_durum:
                                 if st.button("🟢 Final Onayı Ver", key=f"onay2_{b_id}"):
                                     cursor.execute("UPDATE islemler SET durum = 'Onaylandı' WHERE id = ?", (b_id,))
                                     cursor.execute("INSERT INTO sistem_loglari (kullanici, islem) VALUES (?, ?)", (st.session_state['username'], f"Kademeli Final Onay Verildi (#{b_id})"))
                                     conn.commit()
-                                    st.success(f"#{b_id} numaralı talep tamamen onaylandı!")
+                                    st.success(f"#{b_id} onaylandı!")
                                     st.rerun()
                             else:
                                 if st.button("✅ Onayla", key=f"onay_{b_id}"):
                                     cursor.execute("UPDATE islemler SET durum = 'Onaylandı' WHERE id = ?", (b_id,))
                                     cursor.execute("INSERT INTO sistem_loglari (kullanici, islem) VALUES (?, ?)", (st.session_state['username'], f"Talep Onaylandı (#{b_id})"))
                                     conn.commit()
-                                    st.success(f"#{b_id} numaralı talep onaylandı!")
+                                    st.success(f"#{b_id} onaylandı!")
                                     st.rerun()
                         with col_ret:
                             if st.button("❌ Reddet", key=f"ret_{b_id}"):
                                 cursor.execute("UPDATE islemler SET durum = 'Reddedildi' WHERE id = ?", (b_id,))
                                 cursor.execute("INSERT INTO sistem_loglari (kullanici, islem) VALUES (?, ?)", (st.session_state['username'], f"Talep Reddedildi (#{b_id})"))
                                 conn.commit()
-                                st.error(f"#{b_id} numaralı talep reddedildi.")
+                                st.error(f"#{b_id} reddedildi.")
                                 st.rerun()
                         st.markdown("---")
             else:
-                st.info("Şu an onay bekleyen talep bulunmuyor.")
+                st.info("Onay bekleyen talep bulunmuyor.")
 
-        # 5. Sekme: Gelişmiş Filtreler ve Geçmiş
         with sekmeler[4]:
             st.subheader("📊 Gelişmiş Filtreleme & Raporlar")
-            
             c_f1, c_f2, c_f3 = st.columns(3)
             with c_f1:
                 f_kul = st.text_input("Kullanıcı / Şirket Ara")
             with c_f2:
-                f_tur = st.selectbox("İşlem Türü Filtresi", ["Tümü", "Yatırım", "Çekim"])
+                f_tur = st.selectbox("İşlem Türü", ["Tümü", "Yatırım", "Çekim"])
             with c_f3:
-                f_durum = st.selectbox("Durum Filtresi", ["Tümü", "Onaylandı", "Beklemede", "Reddedildi"])
+                f_durum = st.selectbox("Durum", ["Tümü", "Onaylandı", "Beklemede", "Reddedildi"])
                 
             sorgu = "SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler WHERE 1=1"
             parametreler = []
-            
             if f_kul:
                 sorgu += " AND kullanici LIKE ?"
                 parametreler.append(f"%{f_kul}%")
@@ -253,15 +206,12 @@ else:
             
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
-                st.download_button("📥 Filtrelenmiş Veriyi Excel / CSV İndir", df.to_csv(index=False).encode('utf-8'), "filtrelenmis_rapor.csv", "text/csv")
+                st.download_button("📥 Excel / CSV İndir", df.to_csv(index=False).encode('utf-8'), "rapor.csv", "text/csv")
             else:
-                st.info("Filtreleme kriterlerine uygun kayıt bulunamadı.")
+                st.info("Kayıt bulunamadı.")
 
-        # 6. Sekme: Partner API Yönetimi ve Entegrasyon Dokümanı
         with sekmeler[5]:
-            st.subheader("🔑 Partner Şirket API Anahtarı ve Entegrasyon Dokümanı")
-            st.write("Partner şirketlerin kendi yazılımlarından otomatik talep gönderebilmesi için API anahtarları oluşturun.")
-            
+            st.subheader("🔑 Partner Şirket API Anahtarı")
             with st.form("api_form"):
                 s_adi = st.text_input("Partner Şirket Adı")
                 if st.form_submit_button("API Key Üret"):
@@ -269,39 +219,51 @@ else:
                         yeni_key = "pk_" + secrets.token_hex(16)
                         cursor.execute("INSERT INTO api_anahtarlari (sirket_adi, api_key) VALUES (?, ?)", (s_adi, yeni_key))
                         conn.commit()
-                        st.success(f"'{s_adi}' için başarıyla API Key üretildi!")
+                        st.success(f"'{s_adi}' için API Key üretildi!")
                     else:
-                        st.error("Lütfen şirket adı girin.")
+                        st.error("Şirket adı girin.")
                         
             st.markdown("---")
-            st.subheader("📋 Aktif Partner API Anahtarları")
             cursor.execute("SELECT id, sirket_adi, api_key, olusturma_tarihi FROM api_anahtarlari")
             apiler = cursor.fetchall()
             if apiler:
                 for api in apiler:
-                    st.info(f"🏢 **{api[1]}** | API Key: `{api[2]}` | 🕒 Tarih: {api[3]}")
+                    st.info(f"🏢 **{api[1]}** | API Key: `{api[2]}`")
             else:
-                st.warning("Henüz üretilmiş bir API anahtarı yok.")
+                st.warning("API anahtarı yok.")
+
+        with sekmeler[6]:
+            st.subheader("👥 Personel Yönetimi")
+            with st.form("p_form"):
+                pk = st.text_input("Kullanıcı Adı")
+                ps = st.text_input("Şifre", type="password")
+                pr = st.selectbox("Rol", ["Çalışan", "Yönetici"])
+                if st.form_submit_button("Personel Aç"):
+                    try:
+                        cursor.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol) VALUES (?, ?, ?)", (pk, make_hashes(ps), pr))
+                        conn.commit()
+                        st.success("Personel eklendi!")
+                    except:
+                        st.error("Bu kullanıcı adı var.")
 
             st.markdown("---")
-            st.subheader("📖 Partner Yazılımcılar İçin API Entegrasyon Kılavuzu")
-            st.markdown("""
-Partner şirketlerin sisteminize otomatik `POST` isteği atabilmesi için kullanması gereken örnek **Python / cURL** entegrasyon şablonu:
+            cursor.execute("SELECT kullanici_adi, rol FROM kullanicilar")
+            for p in cursor.fetchall():
+                st.markdown(f"👤 **{p[0]}** ({p[1]})")
 
-```python
-import requests
-
-url = "[https://senin-panel-adresin.streamlit.app/api/talep-olustur](https://senin-panel-adresin.streamlit.app/api/talep-olustur)"
-headers = {
-    "Authorization": "Bearer pk_97a3e21b2b6a1709ae3cd572cb99a9f1", # Şirkete verdiğin API Key
-    "Content-Type": "application/json"
-}
-payload = {
-    "tur": "Yatırım",         # 'Yatırım' veya 'Çekim'
-    "tutar": 15000.0,         # İşlem Tutarı
-    "departman": "Pazarlama", # İlgili Departman
-    "aciklama": "API Otomatik Transfer"
-}
-
-response = requests.post(url, json=payload, headers=headers)
-print(response.json())
+        with sekmeler[7]:
+            st.subheader("🛡️ Sistem Logları ve Veritabanı Yedeği")
+            with open("finance_panel.db", "rb") as db_file:
+                st.download_button("💾 Veritabanını Yedekle (.db)", db_file, "finance_panel_yedek.db", "application/octet-stream")
+            st.markdown("---")
+            df_l = pd.read_sql_query("SELECT * FROM sistem_loglari ORDER BY id DESC", conn)
+            st.dataframe(df_l, use_container_width=True)
+    else:
+        with sekmeler[3]:
+            st.subheader("📊 Tüm İşlem Geçmişi")
+            df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler ORDER BY id DESC", conn)
+            if not df.empty:
+                st.dataframe(df, use_container_width=True)
+                st.download_button("📥 Excel / CSV İndir", df.to_csv(index=False).encode('utf-8'), "rapor.csv", "text/csv")
+            else:
+                st.info("Kayıt bulunamadı.")
