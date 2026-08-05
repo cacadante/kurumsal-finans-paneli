@@ -51,6 +51,21 @@ if not cursor.fetchone():
 
 st.set_page_config(page_title="Kurumsal Finans ve Cüzdan Yönetimi", page_icon="💼", layout="wide")
 
+# Özel CSS Tasarımı ve Şık Görünüm Dokunuşları
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0e1117;
+    }
+    .stMetric {
+        background-color: #161b22;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #30363d;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'username' not in st.session_state:
@@ -83,7 +98,6 @@ else:
     st.sidebar.markdown(f"**Rol:** `{st.session_state['role']}`")
     st.sidebar.write("---")
     
-    # Tüm seçenekleri net bir şekilde alt alta sıralıyoruz
     menu_secenekleri = [
         "🏠 Ana Sayfa & Özet", 
         "💳 Şirket IBAN & Kripto Cüzdanlar", 
@@ -105,6 +119,7 @@ else:
 
     if menu == "🏠 Ana Sayfa & Özet":
         st.title("🏢 Kurumsal Finans ve Cüzdan Yönetim Paneli")
+        st.markdown("---")
         st.write("Sistem üzerinden tüm yatırımları, çekimleri ve kurumsal cüzdanları güvenli bir şekilde yönetebilirsiniz.")
         
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Yatırım'")
@@ -115,6 +130,7 @@ else:
         
         net_durum = toplam_yatirim - toplam_cekim
         
+        st.write("")
         col1, col2, col3 = st.columns(3)
         col1.metric("🟢 Toplam Yatırım", f"{toplam_yatirim:,.2f} TL/USDT")
         col2.metric("🔴 Toplam Çekim", f"{toplam_cekim:,.2f} TL/USDT")
@@ -122,6 +138,7 @@ else:
 
     elif menu == "💳 Şirket IBAN & Kripto Cüzdanlar":
         st.subheader("💳 Kurumsal IBAN ve Kripto Cüzdan Yönetimi")
+        st.markdown("---")
         
         with st.form("hesap_ekle_form"):
             hesap_turu = st.selectbox("Hesap Türü", ["Banka IBAN", "Kripto Cüzdan (USDT - TRC20/ERC20)"])
@@ -149,6 +166,7 @@ else:
 
     elif menu == "➕ Yatırım / Çekim İşlemleri":
         st.subheader("➕ Yeni Yatırım veya Çekim Talebi Girişi")
+        st.markdown("---")
         
         with st.form("islem_form"):
             islem_turu = st.radio("İşlem Türünü Seçin", ["Yatırım", "Çekim"])
@@ -167,6 +185,7 @@ else:
 
     elif menu == "📊 Geçmiş İşlemler":
         st.subheader("📊 Tüm Yatırım ve Çekim Geçmişi Logları")
+        st.markdown("---")
         
         cursor.execute("SELECT id, kullanici, tur, tutar, aciklama, tarih FROM islemler ORDER BY id DESC")
         veriler = cursor.fetchall()
@@ -183,6 +202,7 @@ else:
 
     elif menu == "👥 Personel / Hesap Oluştur" and st.session_state['role'] == 'Yönetici':
         st.subheader("👥 Çalışanlar İçin Yeni Panel Hesabı Oluştur")
+        st.markdown("---")
         st.write("Çalışanların kendi kullanıcı adı ve şifreleriyle sisteme giriş yapıp işlem yapabilmesi için buradan hesap açabilirsiniz.")
         
         with st.form("personel_form"):
