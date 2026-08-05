@@ -2,7 +2,6 @@ import streamlit as st
 import sqlite3
 import hashlib
 
-# Şifreleme fonksiyonu
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
@@ -11,11 +10,9 @@ def check_hashes(password, hashed_text):
         return True
     return False
 
-# Veritabanı bağlantısı
 conn = sqlite3.connect('finance_panel.db', check_same_thread=False)
 cursor = conn.cursor()
 
-# Tabloları oluşturma
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS kullanicilar (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +43,6 @@ cursor.execute('''
 ''')
 conn.commit()
 
-# Varsayılan Admin hesabı yoksa oluştur (Kullanıcı: admin, Şifre: 123456)
 cursor.execute("SELECT * FROM kullanicilar WHERE kullanici_adi = 'admin'")
 if not cursor.fetchone():
     cursor.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol) VALUES (?, ?, ?)", 
@@ -55,7 +51,6 @@ if not cursor.fetchone():
 
 st.set_page_config(page_title="Kurumsal Finans ve Cüzdan Yönetimi", page_icon="💼", layout="wide")
 
-# Oturum Yönetimi
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'username' not in st.session_state:
@@ -63,7 +58,6 @@ if 'username' not in st.session_state:
 if 'role' not in st.session_state:
     st.session_state['role'] = ''
 
-# Giriş Ekranı
 if not st.session_state['logged_in']:
     st.title("🔐 Kurumsal Panel Giriş Ekranı")
     st.write("Lütfen sistemdeki kullanıcı adınız ve şifrenizle giriş yapın.")
@@ -85,20 +79,25 @@ if not st.session_state['logged_in']:
             else:
                 st.error("Hatalı kullanıcı adı veya şifre!")
 else:
-    # Ana Panel Arayüzü
     st.sidebar.title(f"Hoş geldin, {st.session_state['username']}")
     st.sidebar.markdown(f"**Rol:** `{st.session_state['role']}`")
     st.sidebar.write("---")
     
-    menu_secenekleri = ["🏠 Ana Sayfa & Özet", "💳 Şirket IBAN & Kripto Cüzdanlar", "➕ Yatırım / Çekim İşlemleri", "📊 Geçmiş İşlemler"]
+    # Tüm seçenekleri net bir şekilde alt alta sıralıyoruz
+    menu_secenekleri = [
+        "🏠 Ana Sayfa & Özet", 
+        "💳 Şirket IBAN & Kripto Cüzdanlar", 
+        "➕ Yatırım / Çekim İşlemleri", 
+        "📊 Geçmiş İşlemler"
+    ]
     
-    # Eğer yönetici ise personel ekleme menüsünü de ekle
     if st.session_state['role'] == 'Yönetici':
         menu_secenekleri.append("👥 Personel / Hesap Oluştur")
         
-    menu = st.sidebar.selectbox("Menü", menu_secenekleri)
+    menu = st.sidebar.radio("📌 Menü Seçenekleri", menu_secenekleri)
     
-    if st.sidebar.button("Çıkış Yap"):
+    st.sidebar.write("---")
+    if st.sidebar.button("🚪 Çıkış Yap"):
         st.session_state['logged_in'] = False
         st.session_state['username'] = ''
         st.session_state['role'] = ''
@@ -108,7 +107,6 @@ else:
         st.title("🏢 Kurumsal Finans ve Cüzdan Yönetim Paneli")
         st.write("Sistem üzerinden tüm yatırımları, çekimleri ve kurumsal cüzdanları güvenli bir şekilde yönetebilirsiniz.")
         
-        # İstatistikler için verileri çek
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Yatırım'")
         toplam_yatirim = cursor.fetchone()[0] or 0.0
         
@@ -122,7 +120,7 @@ else:
         col2.metric("🔴 Toplam Çekim", f"{toplam_cekim:,.2f} TL/USDT")
         col3.metric("💰 Net Kasa / Bakiye", f"{net_durum:,.2f} TL/USDT")
 
-    elif menu == "💳 Şirket IBAN & Kripto Cüzdanлар":
+    elif menu == "💳 Şirket IBAN & Kripto Cüzdanlar":
         st.subheader("💳 Kurumsal IBAN ve Kripto Cüzdan Yönetimi")
         
         with st.form("hesap_ekle_form"):
@@ -208,6 +206,6 @@ else:
         st.write("---")
         st.subheader("📋 Mevcut Sistem Kullanıcıları")
         cursor.execute("SELECT id, kullanici_adi, rol FROM kullanicilar")
-        Kisiler = cursor.fetchall()
-        for k in Kisiler:
-            st.write(- f"**{k[1]}** (Rol: `{k[2]}`)")
+        kisiler = cursor.fetchall()
+        for k in kisiler:
+            st.markdown(f"👤 **{k[1]}** (Rol: `{k[2]}`)")
