@@ -30,6 +30,38 @@ if not cursor.fetchone():
 
 st.set_page_config(page_title="Kurumsal Finans ve Onay Paneli", page_icon="💼", layout="wide")
 
+# Gelişmiş Kurumsal UI & Şık Kart Tasarımı için Özel CSS
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0b0f19;
+    }
+    .stMetric {
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #374151;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #111827;
+        padding: 10px;
+        border-radius: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1f2937;
+        border-radius: 6px;
+        color: white;
+        padding: 8px 16px;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #2563eb !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'username' not in st.session_state:
@@ -38,34 +70,37 @@ if 'role' not in st.session_state:
     st.session_state['role'] = ''
 
 if not st.session_state['logged_in']:
-    st.title("🔐 Kurumsal Panel Giriş Ekranı")
-    with st.form("login_form"):
-        k_adi = st.text_input("Kullanıcı Adı")
-        sifre = st.text_input("Şifre", type="password")
-        if st.form_submit_button("Giriş Yap"):
-            cursor.execute("SELECT sifre, rol FROM kullanicilar WHERE kullanici_adi = ?", (k_adi,))
-            user = cursor.fetchone()
-            if user and check_hashes(sifre, user[0]):
-                st.session_state['logged_in'] = True
-                st.session_state['username'] = k_adi
-                st.session_state['role'] = user[1]
-                cursor.execute("INSERT INTO sistem_loglari (kullanici, islem) VALUES (?, ?)", (k_adi, "Sisteme Giriş Yaptı"))
-                conn.commit()
-                st.rerun()
-            else:
-                st.error("Hatalı kullanıcı adı veya şifre!")
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
+        st.markdown("## 🔐 Kurumsal Panel Giriş Ekranı")
+        st.write("Lütfen sistemdeki kullanıcı adınız ve şifrenizle giriş yapın.")
+        with st.form("login_form"):
+            k_adi = st.text_input("Kullanıcı Adı")
+            sifre = st.text_input("Şifre", type="password")
+            if st.form_submit_button("Giriş Yap", use_container_width=True):
+                cursor.execute("SELECT sifre, rol FROM kullanicilar WHERE kullanici_adi = ?", (k_adi,))
+                user = cursor.fetchone()
+                if user and check_hashes(sifre, user[0]):
+                    st.session_state['logged_in'] = True
+                    st.session_state['username'] = k_adi
+                    st.session_state['role'] = user[1]
+                    cursor.execute("INSERT INTO sistem_loglari (kullanici, islem) VALUES (?, ?)", (k_adi, "Sisteme Giriş Yaptı"))
+                    conn.commit()
+                    st.rerun()
+                else:
+                    st.error("Hatalı kullanıcı adı veya şifre!")
 else:
     col_baslik, col_cikis = st.columns([8, 2])
     col_baslik.title("🏢 Kurumsal Finans & Onay Paneli")
     
-    if col_cikis.button("🚪 Çıkış Yap"):
+    if col_cikis.button("🚪 Çıkış Yap", use_container_width=True):
         st.session_state['logged_in'] = False
         st.rerun()
 
-    st.markdown(f"Aktif Kullanıcı: **{st.session_state['username']}** | Rol: `{st.session_state['role']}`")
+    st.markdown(f"👤 Aktif Kullanıcı: **{st.session_state['username']}** &nbsp;|&nbsp; 🛡️ Rol: `{st.session_state['role']}`")
     st.markdown("---")
 
-    # Sekme listesini net bir şekilde oluşturuyoruz
     if st.session_state['role'] == 'Yönetici':
         tab_listesi = [
             "🏠 Ana Sayfa", 
@@ -89,7 +124,7 @@ else:
 
     # 1. Sekme: Ana Sayfa
     with sekmeler[0]:
-        st.subheader("Genel Finansal Özet (Sadece Onaylanan İşlemler)")
+        st.subheader("📊 Genel Finansal Özet (Onaylanan İşlemler)")
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Yatırım' AND durum = 'Onaylandı'")
         t_yatirim = cursor.fetchone()[0] or 0.0
         cursor.execute("SELECT SUM(tutar) FROM islemler WHERE tur = 'Çekim' AND durum = 'Onaylandı'")
@@ -99,9 +134,9 @@ else:
         c1, c2, c3 = st.columns(3)
         c1.metric("🟢 Toplam Yatırım", f"{t_yatirim:,.2f} TL/USDT")
         c2.metric("🔴 Toplam Çekim", f"{t_cekim:,.2f} TL/USDT")
-        c3.metric("💰 Net Kasa", f"{net:,.2f} TL/USDT")
+        c3.metric("💰 Net Kasa / Bakiye", f"{net:,.2f} TL/USDT")
 
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("🎯 Departman Bütçe ve Harcama Durumları")
         cursor.execute("SELECT departman, limit_tutar FROM butceler")
         butceler = cursor.fetchall()
@@ -114,41 +149,43 @@ else:
                 st.write(f"**{dept}** (Harcanan: {harcanan:,.2f} TL / Limit: {limit:,.2f} TL)")
                 st.progress(yuzde)
         else:
-            st.info("Henüz tanımlanmış bir bütçe limiti yok.")
+            st.info("Henüz tanımlanmış bir bütçe limiti bulunmuyor.")
 
-        st.markdown("---")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("📈 Departman Bazlı Harcama Dağılımı")
         df_g = pd.read_sql_query("SELECT departman, SUM(tutar) as toplam FROM islemler WHERE durum = 'Onaylandı' GROUP BY departman", conn)
         if not df_g.empty:
-            st.bar_chart(df_g.set_index('departman'))
+            st.bar_chart(df_g.set_index('departman'), use_container_width=True)
 
     # 2. Sekme: Cüzdanlar
     with sekmeler[1]:
-        st.subheader("Şirket IBAN & Kripto Cüzdanlar")
+        st.subheader("💳 Şirket IBAN & Kripto Cüzdan Yönetimi")
         with st.form("h_form"):
             h_tur = st.selectbox("Tür", ["Banka IBAN", "Kripto Cüzdan"])
             isim = st.text_input("Borsa / Banka Adı")
             detay = st.text_input("IBAN / Cüzdan Adresi")
-            if st.form_submit_button("Kaydet"):
+            if st.form_submit_button("Cüzdanı / IBAN'ı Kaydet"):
                 if isim and detay:
                     cursor.execute("INSERT INTO hesaplar (tur, isim, detay) VALUES (?, ?, ?)", (h_tur, isim, detay))
                     conn.commit()
-                    st.success("Kaydedildi!")
+                    st.success("Hesap başarıyla eklendi!")
         
+        st.markdown("---")
         cursor.execute("SELECT tur, isim, detay FROM hesaplar")
         for h in cursor.fetchall():
             st.info(f"**[{h[0]}]** {h[1]} : `{h[2]}`")
 
     # 3. Sekme: Talep Oluştur
     with sekmeler[2]:
-        st.subheader("Yeni Yatırım veya Çekim Talebi Gönder")
+        st.subheader("➕ Yeni Yatırım veya Çekim Talebi Gönder")
         with st.form("i_form"):
-            i_tur = st.radio("İşlem Türü", ["Yatırım", "Çekim"])
+            i_tur = st.radio("İşlem Türü", ["Yatırım", "Çekim"], horizontal=True)
             tutar = st.number_input("Tutar", min_value=0.0)
             dept = st.selectbox("Departman", ["Pazarlama", "Yazılım / Teknoloji", "Operasyon", "Likidite / Finans", "Yönetim"])
             notlar = st.text_area("Açıklama / Not / Referans")
             dekont_dosya = st.file_uploader("Dekont / Fatura Yükle", type=["png", "jpg", "jpeg", "pdf"])
             
-            if st.form_submit_button("Onaya Gönder"):
+            if st.form_submit_button("Talebi Onaya Gönder"):
                 if tutar > 0:
                     dosya_adi = dekont_dosya.name if dekont_dosya else "Dekont Yok"
                     cursor.execute("INSERT INTO islemler (kullanici, tur, tutar, departman, aciklama, dekont, durum) VALUES (?, ?, ?, ?, ?, ?, ?)", 
@@ -156,12 +193,10 @@ else:
                     conn.commit()
                     st.success("Talebiniz başarıyla yönetici onayına gönderildi!")
 
-    # Eğer yönetici ise Onay Sekmesi (4. Sekme)
+    # Yönetici Onay ve Diğer Sekmeler
     if st.session_state['role'] == 'Yönetici':
         with sekmeler[3]:
             st.subheader("🔔 Bekleyen Yatırım ve Çekim Talepleri (Onay Merkezi)")
-            st.write("Şirketlerden veya çalışanlardan gelen talepleri buradan inceleyip onaylayabilir veya reddedebilirsiniz.")
-            
             cursor.execute("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, tarih FROM islemler WHERE durum = 'Beklemede' ORDER BY id DESC")
             bekleyenler = cursor.fetchall()
             
@@ -192,9 +227,8 @@ else:
             else:
                 st.info("Şu an onay bekleyen yeni bir talep bulunmuyor.")
 
-        # 5. Sekme: Geçmiş İşlemler
         with sekmeler[4]:
-            st.subheader("Tüm İşlem Geçmişi (Onaylı / Bekleyen / Reddedilen)")
+            st.subheader("📊 Tüm İşlem Geçmişi ve Raporlar")
             df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler ORDER BY id DESC", conn)
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
@@ -202,9 +236,8 @@ else:
             else:
                 st.info("Kayıt bulunamadı.")
 
-        # 6. Sekme: Bütçe Yönetimi
         with sekmeler[5]:
-            st.subheader("Departman Bütçe Limitleri Belirle")
+            st.subheader("🎯 Departman Bütçe Limitleri")
             with st.form("butce_form"):
                 b_dept = st.selectbox("Hedef Departman", ["Pazarlama", "Yazılım / Teknoloji", "Operasyon", "Likidite / Finans", "Yönetim"])
                 b_limit = st.number_input("Aylık Harcama Limiti (TL/USDT)", min_value=0.0, step=1000.0)
@@ -213,9 +246,8 @@ else:
                     conn.commit()
                     st.success(f"{b_dept} için limit güncellendi!")
 
-        # 7. Sekme: Personel Yönetimi
         with sekmeler[6]:
-            st.subheader("Personel Ekle")
+            st.subheader("👥 Personel Yönetimi")
             with st.form("p_form"):
                 pk = st.text_input("Kullanıcı Adı")
                 ps = st.text_input("Şifre", type="password")
@@ -228,22 +260,21 @@ else:
                     except:
                         st.error("Bu kullanıcı adı zaten var.")
 
+            st.markdown("---")
             cursor.execute("SELECT kullanici_adi, rol FROM kullanicilar")
             for p in cursor.fetchall():
-                st.markdown(f"👤 **{p[0]}** ({p[1]})")
+                st.markdown(f"👤 **{p[0]}** ({p[1]},{' Yönetici' if p[1]=='Yönetici' else ' Çalışan'})")
 
-        # 8. Sekme: Sistem Logları
         with sekmeler[7]:
-            st.subheader("Sistem Logları ve Güvenli Veritabanı Yedeği")
+            st.subheader("🛡️ Sistem Logları ve Veritabanı Yedeği")
             with open("finance_panel.db", "rb") as db_file:
-                st.download_button("💾 Veritabanını Yedekle (.db)", db_file, "finance_panel_yedek.db", "application/octet-stream")
+                st.download_button("💾 Tüm Veritabanını Yedekle (.db)", db_file, "finance_panel_yedek.db", "application/octet-stream")
             st.markdown("---")
             df_l = pd.read_sql_query("SELECT * FROM sistem_loglari ORDER BY id DESC", conn)
             st.dataframe(df_l, use_container_width=True)
     else:
-        # Çalışanlar için Geçmiş İşlemler sekmesi (4. sekme)
         with sekmeler[3]:
-            st.subheader("Tüm İşlem Geçmişi (Onaylı / Bekleyen / Reddedilen)")
+            st.subheader("📊 Tüm İşlem Geçmişi")
             df = pd.read_sql_query("SELECT id, kullanici, tur, tutar, departman, aciklama, dekont, durum, tarih FROM islemler ORDER BY id DESC", conn)
             if not df.empty:
                 st.dataframe(df, use_container_width=True)
